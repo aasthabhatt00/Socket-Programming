@@ -13,8 +13,8 @@ def main(argv) -> None:
     # start the threads. The purpose of this is to allow the client to have a more
     # seamless communication with the server on the other end. Otherwise, communication
     # becomes more complicated.
-    sender_thread = Thread(target=sender, args=(conn, "client_dir"))
-    receiver_thread = Thread(target=receiver, args=(conn, "client_dir"))
+    sender_thread = Thread(target=sender, args=(conn, "client_data"))
+    receiver_thread = Thread(target=receiver, args=(conn, "client_data"))
 
     # Start and join the threads.
     sender_thread.start()

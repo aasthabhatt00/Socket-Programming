@@ -1,8 +1,9 @@
 import argparse
 import os
 import pickle
-import os.path as osp
+
 from socket import socket, AF_INET, SOCK_STREAM
+from pathlib import Path
 from time import ctime
 from utils import *
 
@@ -119,12 +120,12 @@ def sender(conn: socket, home_dir: str) -> None:
             command = message.split(" ")
             if command[0] == ":UPLOAD:" and len(command) == 2:
                 filename = message.split()[1]
-                upload(conn, f"{home_dir}\{filename}")
+                upload(conn, f"{home_dir}/{filename}")
                 print(f"{filename} successfully uploaded to the server.")
             elif command[0] == ":DELETE:" and len(command) == 2:
                 filename = message.split()[1]
                 filename = os.path.basename(filename)
-                delete(conn, f"{home_dir}\{filename}")
+                delete(conn, f"{home_dir}/{filename}")
                 print(f"{filename} successfully deleted from the server.")
             else:
                 message = {PACKET_HEADER: ":MESSAGE:", PACKET_PAYLOAD: message}
@@ -149,21 +150,20 @@ def handle_received_message(message: dict, home_dir: str) -> None:
             # (3) Save the data as a text file to the device's directory.
             filename = message[PACKET_PAYLOAD]["filename"].split(os.sep)[-1]
             text = message[PACKET_PAYLOAD]["text"]
-            with open(f"{home_dir}\{filename}", "w") as file:
+            with open(f"{home_dir}/{filename}", "w") as file:
                 file.write(text)
             print(f"[{ctime()}] Saved file '{filename}' to your directory!")
-        
+
         elif message[PACKET_HEADER] == ":DELETE:":
             # (1) Get just the filename without the prefacing path.
             # (2) Delete the file from the device's directory.
             filename = message[PACKET_PAYLOAD].split(os.sep)[-1]
             filename = os.path.basename(filename)
-            os.remove(f"{home_dir}\{filename}")
+            os.remove(f"{home_dir}/{filename}")
             print(f"[{ctime()}] Deleted file '{filename}' from your directory!")
-        
+
         else:
             print(f"{message[PACKET_PAYLOAD]}")
-
 
 
 def receiver(conn: socket, home_dir: str) -> None:

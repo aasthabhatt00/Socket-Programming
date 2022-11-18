@@ -1,7 +1,7 @@
 from core import *
 from threading import Thread
-
-
+import pathlib
+import os.path as osp
 def main(argv) -> None:
     # Initialize the server socket that a client will connect to.
     with socket(AF_INET, SOCK_STREAM) as server_socket:
@@ -18,8 +18,9 @@ def main(argv) -> None:
         # start the threads. The purpose of this is to allow the server to have a more
         # seamless communication with the client on the other end. Otherwise, communication
         # becomes more complicated.
-        sender_thread = Thread(target=sender, args=(client_sock, "server_data"))
-        receiver_thread = Thread(target=receiver, args=(client_sock, "server_data"))
+        
+        sender_thread = Thread(target=sender, args=(client_sock, osp.join(pathlib.Path(__file__).parent.absolute(), "server_data")))
+        receiver_thread = Thread(target=receiver, args=(client_sock, osp.join(pathlib.Path(__file__).parent.absolute(), "server_data")))
 
         # Start and join the threads.
         sender_thread.start()

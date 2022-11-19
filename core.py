@@ -9,6 +9,7 @@ from tabulate import tabulate
 from time import ctime
 from datetime import datetime, timezone
 from utils import *
+import pathlib
 
 
 def connect():
@@ -86,6 +87,16 @@ def download(conn: socket, filename: str) -> None:
         filename (str): Name of the file requested for download.
     """
 
+    with open(filename, "r") as file:
+        text = file.read()
+
+    message = {
+        PACKET_HEADER: ":DOWNLOAD:",
+        PACKET_PAYLOAD: {"filename": filename, "text": text},
+    }
+    if message:
+        send_msg(conn, pickle.dumps(message))
+
 
 def delete(conn: socket, filename: str) -> None:
     """Prepares a message to be sent with the filename attached that is to be deleted.
@@ -140,6 +151,13 @@ def sender(conn: socket, home_dir: str) -> None:
                 )
             elif command[0] == ":DISCONNECT":
                 conn.close()
+            elif command[0] == ":DOWNLOAD:" and len(command) == 2:
+                dir1 = osp.join(pathlib.Path(__file__).parent.absolute(), "server_data")
+                filename = message.split()[1]
+                filename = os.path.basename(filename)
+                download(conn, f"{dir1}/{filename}")
+                print(f"{filename} successfully downloaded from the server.")
+
             else:
                 message = {PACKET_HEADER: ":MESSAGE:", PACKET_PAYLOAD: message}
                 if message:
@@ -166,6 +184,17 @@ def handle_received_message(message: dict, home_dir: str) -> None:
             with open(f"{home_dir}/{filename}", "w") as file:
                 file.write(text)
             print(f"[{ctime()}] Saved file '{filename}' to your directory!")
+
+        elif message[PACKET_HEADER] == ":DOWNLOAD:":
+            # (1) Get just the filename without the prefacing path.
+            # (2) Get the text object.
+            # (3) Save the data as a text file to the device's directory.
+            dir2 = osp.join(pathlib.Path(__file__).parent.absolute(), "client_data")
+            filename = message[PACKET_PAYLOAD]["filename"].split(os.sep)[-1]
+            text = message[PACKET_PAYLOAD]["text"]
+            with open(f"{dir2}/{filename}", "w") as file:
+                file.write(text)
+            print(f"[{ctime()}] Downloaded file '{filename}' from the server!")
 
         elif message[PACKET_HEADER] == ":DELETE:":
             # (1) Get just the filename without the prefacing path.

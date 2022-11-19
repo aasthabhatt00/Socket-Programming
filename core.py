@@ -1,9 +1,13 @@
 import argparse
 import os
-import pickle
 import os.path as osp
+import pathlib
+import pickle
+
 from socket import socket, AF_INET, SOCK_STREAM
+from tabulate import tabulate
 from time import ctime
+from datetime import datetime, timezone
 from utils import *
 
 
@@ -39,7 +43,7 @@ def connect():
             break
         print()
 
-    return (host, port)
+    return host, port
 
 
 def parse_args() -> argparse.Namespace:
@@ -95,13 +99,16 @@ def delete(conn: socket, filename: str) -> None:
         send_msg(conn, pickle.dumps(message))
 
 
-def dir(conn: socket, filename: str) -> None:
+def dir(conn: socket, home_dir) -> None:
     """Prepares a message to be sent to list files existing in the directory.
 
     Args:
-        conn (socket): Socket to delete the file from.
-        filename (str): Name of the file to be deleted.
+        conn (socket): Socket to list the files from.
+        home_dir (str): Name of the directory where the server stores files.
     """
+    message = {PACKET_HEADER: ":DIR:", PACKET_PAYLOAD: home_dir}
+    if message:
+        send_msg(conn, pickle.dumps(message))
 
 
 def sender(conn: socket, home_dir: str) -> None:
@@ -119,13 +126,20 @@ def sender(conn: socket, home_dir: str) -> None:
             command = message.split(" ")
             if command[0] == ":UPLOAD:" and len(command) == 2:
                 filename = message.split()[1]
-                upload(conn, f"{home_dir}\{filename}")
+                upload(conn, f"{home_dir}/{filename}")
                 print(f"{filename} successfully uploaded to the server.")
             elif command[0] == ":DELETE:" and len(command) == 2:
                 filename = message.split()[1]
                 filename = os.path.basename(filename)
-                delete(conn, f"{home_dir}\{filename}")
+                delete(conn, f"{home_dir}/{filename}")
                 print(f"{filename} successfully deleted from the server.")
+            elif command[0] == ":DIR:":
+                dir(
+                    conn,
+                    osp.join(pathlib.Path(__file__).parent.absolute(), "server_data"),
+                )
+            elif command[0] == ":DISCONNECT":
+                conn.close()
             else:
                 message = {PACKET_HEADER: ":MESSAGE:", PACKET_PAYLOAD: message}
                 if message:
@@ -149,21 +163,43 @@ def handle_received_message(message: dict, home_dir: str) -> None:
             # (3) Save the data as a text file to the device's directory.
             filename = message[PACKET_PAYLOAD]["filename"].split(os.sep)[-1]
             text = message[PACKET_PAYLOAD]["text"]
-            with open(f"{home_dir}\{filename}", "w") as file:
+            with open(f"{home_dir}/{filename}", "w") as file:
                 file.write(text)
             print(f"[{ctime()}] Saved file '{filename}' to your directory!")
-        
+
         elif message[PACKET_HEADER] == ":DELETE:":
             # (1) Get just the filename without the prefacing path.
             # (2) Delete the file from the device's directory.
             filename = message[PACKET_PAYLOAD].split(os.sep)[-1]
             filename = os.path.basename(filename)
-            os.remove(f"{home_dir}\{filename}")
+            os.remove(f"{home_dir}/{filename}")
             print(f"[{ctime()}] Deleted file '{filename}' from your directory!")
-        
+
+        elif message[PACKET_HEADER] == ":DIR:":
+            files = os.scandir(message[PACKET_PAYLOAD])
+            if len(os.listdir(message[PACKET_PAYLOAD])) == 0:
+                print("The server directory is empty.")
+            else:
+                table = []
+                for file in files:
+                    file_stats = os.stat(file)
+                    filename = file.name
+                    filesize = round(float(file_stats.st_size) / (1024 * 1024), 2)
+                    fileupload = datetime.fromtimestamp(
+                        file_stats.st_mtime, tz=timezone.utc
+                    )
+                    table.append([filename, filesize, fileupload, "[PLACEHOLDER]"])
+
+                headers = [
+                    "Name",
+                    "Size (in MB)",
+                    "Upload Date & Time",
+                    "Number of Downloads",
+                ]
+                print(tabulate(table, headers, tablefmt="fancy_grid"))
+
         else:
             print(f"{message[PACKET_PAYLOAD]}")
-
 
 
 def receiver(conn: socket, home_dir: str) -> None:
